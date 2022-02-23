@@ -1,2 +1,2 @@
 # EDA
- Exploratory data analysis using R and Python
+ Exploratory data analysis of the gapminder and titanic datasets using R and Python
