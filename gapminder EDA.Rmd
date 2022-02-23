@@ -1,0 +1,612 @@
+---
+title: "Gapminder Data Analysis using Tidyverse"
+author: "Shahbaz Alam"
+date: "4/23/2021"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+### Synopsis
+
+This is a sample introduction of Data wrangling using R with the help of the most famous bundle of R packages named ***Tidyverse***. In this introductory document I'm trying to present some basic norms when a data analyst gets the data for the first time and want to grow some intuition about the data.
+
+### Environment Setup
+So first things first, we need to do some initial setup, means setting environment, install/load required packages, 
+explore the structure of the data and perform some exploratory analysis. I'll use the ***gapminder*** data-set for data wrangling and ***ggplot2*** for exploratory analysis. This data come with the ***gapminder*** package and this report is made in ***R Markdown ***. Most of the visualization codes are not displayed here to increase readability. Complete code for this report will be available on my <span style='color:blue'>[***Github Repository***](https://github.com/Choton-1/gapminder-data-analysis)</span>. So, 
+let there be light!
+
+```{r environment setup, results=FALSE, message = FALSE, warning = FALSE}
+rm(list = ls())
+knitr::opts_chunk$set(echo = TRUE)
+
+list.of.packages <- c("rstudioapi","tidyverse", "ggplot2", "gapminder", 
+                      "ggalt", "ggpubr", "ggtext", "ggrepel")
+new.packages <- list.of.packages[!(list.of.packages %in% 
+                                     installed.packages()[,"Package"])]
+if(length(new.packages)) install.packages(new.packages)
+
+library(tidyverse)
+library(gapminder)
+options(dplyr.summarise.inform = FALSE)
+```
+
+Now, we load the *gapminder* data and see the structure of the data. This is the first thing we need to do, when we get any data. This will help us when we create new variables from the existing ones. Sometimes desired output cannot be obtained because of not knowing the data type/variable type. In that case, ***class()*** function helps a lot.
+
+```{r data structure}
+data(gapminder, package = "gapminder")
+str(gapminder)
+```
+
+So, the *gapminder* data contains GDP, population and life expectancy information of 142 countries with their continents from year 1952 to 2007. ***help()*** function provide some basic details about variables and more information can be obtained from [gapminder.org](https://www.gapminder.org/data/documentation/). After loading the data, one very important function is ***View(data_name)*** to see all data in different tab.
+
+### Data Wrangling and exploratory Analysis(EDA)
+
+To perform data wrangling, we'll use ***dplyr*** package. The ***dplyr*** package 
+is part of the ***tidyverse***. It provides a number of very useful functions for 
+manipulating *tibbles* (and their base-R cousin, the *data.frame*) in a way that 
+will reduce repetition, reduce the probability of making errors, and probably even save you some time of typing. Here is a glance of this functions working :
+
+- selecting variables with ***select()***
+- subsetting observations with ***filter()***
+- grouping observations with ***group_by()***
+- generating summary statistics using ***summarize()***
+- generating new variables using ***mutate()***
+- Sorting tibbles using ***arrange()***
+- chaining operations together using pipes ***%>%***
+
+Now, we try to do some exploratory analysis to get some valuable information.
+First, we want to know which 10 countries in Asia has the highest life expectancy in 2007.
+
+```{r Life Expectancy: Top Ten Country in Asia, results= TRUE}
+asiaTopTenLifeExp <- gapminder %>% 
+  filter(continent == "Asia", year == 2007) %>% 
+  select(country, lifeExp) %>% 
+  arrange(desc(lifeExp)) %>% 
+  mutate(lifeExpRank = 1:n()) %>% 
+  slice(1:10)
+# knitr::kable(asiaTopTenLifeExp)
+# knitr::kable(asiaTopTenLifeExp, format = "latex", booktabs = TRUE)
+print(asiaTopTenLifeExp)
+
+```
+
+So, **Japan** has the highest life expectancy not only in Asia but also globally! What about *Bangladesh* in 2007? Lets see 
+
+```{r}
+bdLifeExpRank <- gapminder %>%
+  filter(continent == "Asia", year == 2007) %>%
+  select(country, lifeExp) %>%
+  arrange(desc(lifeExp)) %>%
+  mutate(lifeExpRank = 1:n()) %>%
+  filter(country == "Bangladesh")
+
+bdLifeExpWorldRank <- gapminder %>%
+  filter(year == 2007) %>%
+  select(country, lifeExp) %>%
+  arrange(desc(lifeExp)) %>%
+  mutate(lifeExpRank = 1:n()) %>%
+  filter(country == "Bangladesh")
+
+paste0(bdLifeExpRank$country[1]," ranked ",bdLifeExpRank$lifeExpRank,
+       " in Asia and ", bdLifeExpWorldRank$lifeExpRank,
+       " globally with life expectancy ", bdLifeExpRank$lifeExp," years in 2007")
+```
+So, Bangladesh ranked 27 in Asia and 93 globally in 2007. But, in 2018, according to [World Bank](https://data.worldbank.org/indicator/SP.DYN.LE00.IN?locations=BD) Bangladesh ranked 97 with life expectancy 72.32 years. Similarly, we know **Swaziland* has the lowest life expectancy 39.61 years in the world!
+
+### EDA: Life Expectancy at Birth
+
+Now, let's draw some picture with more useful insights about life expectancy. We want to know average life expectancy of the continents since 1952 to 2007 and where our country belongs! In this report, I'll add only the data manipulation code. Code for graphics will be avoided to increase readability. Full codes will be available on the .rmd file.
+
+```{r rm unnecessary datafile and life exp plot data preperation}
+# remove unnecessary file 
+rm(bdLifeExpRank, bdLifeExpWorldRank)
+
+continentLifeExp <- gapminder %>%
+  group_by(continent, year) %>%
+  summarise(lifeExp = mean(lifeExp)) %>%
+  ungroup() %>%
+  # factor variable might cause problem, so make it as character variable
+  mutate(region = as.character(continent)) %>%
+  select(region, year, lifeExp)
+
+#sepearte Bangladesh and then append with continents life expectancy data to see
+# the position of our country globally
+bdLifeExpYearly <- gapminder %>%
+  filter(country == "Bangladesh") %>%
+  select(country, year, lifeExp) %>%
+  rename(region = country)
+
+combined_Bd_Continent <- bind_rows(continentLifeExp, bdLifeExpYearly)
+rm(continentLifeExp, bdLifeExpYearly)
+
+# get the order of the continents and bangladesh to make visualisation more aesthetic
+regionRank <- combined_Bd_Continent %>%
+  group_by(region) %>%
+  summarise(lifeExp = mean(lifeExp)) %>%
+  ungroup() %>%
+  arrange(desc(lifeExp))
+orderedRegion <- regionRank$region
+rm(regionRank)
+
+combined_Bd_Continent <- combined_Bd_Continent %>%
+  mutate(region = factor(region, levels = orderedRegion, ordered = TRUE))
+
+lastLifeExp <- combined_Bd_Continent %>%
+  group_by(region) %>%
+  arrange(desc(year)) %>%
+  slice(1) %>%
+  arrange(desc(lifeExp))
+
+```
+
+
+```{r life exp: year wise continents, warning= FALSE, echo = FALSE}
+
+col_code <- c("#2f7ed8","#1d4670", "#8bbc21", "#910000", "#1aadce", "#b3af44")
+library(ggrepel)
+
+lifeExpPlot <- ggplot(combined_Bd_Continent, aes(x = factor(year), y = lifeExp, group = region, color = region)) +
+  geom_line(lwd = .8) +
+  geom_point(size = 2) +
+  labs(title =  "Average Life Expectancy of the Continents and Bangladesh from 1952 to 2007",
+       x = "Year",
+       y = "Life Expectancy") +
+  theme_bw()+
+  theme(
+        plot.title = element_text(size= 12, face='bold', color = '#104E8B', hjust = 0.5),
+        axis.title = element_text(size= 9, face="bold"),
+        axis.text.x = element_text(angle = 90, hjust = 0.5, vjust = .2),
+        legend.title = element_blank(), legend.position = "top") +
+  guides(color = guide_legend(nrow = 1)) +
+  scale_color_manual(values = col_code) +
+  geom_text_repel(data = lastLifeExp, aes(label = paste0(round(lifeExp, 1), " Years")),
+                  fontface ="bold", point.padding = 0.2, size = 3, hjust = "right", show.legend = F)
+
+print(lifeExpPlot)
+
+```
+
+Here,Legends are ordered from highest to lowest life expectancy at birth. Continent Oceania has highest life expectancy and Africa has the lowest throughout this time interval. Though Bangladesh has life expectancy lower than average in Asia, It shows a high increasing trend since 1977. 
+
+### EDA: GDP per Capita
+
+What about GDP, Let's explore some interesting facts with 1-D plot/density plot and line plot. Here is a box-plot of GDP per continents from 1952 to 2007.
+
+```{r GDP: year wise continents, warning=FALSE}
+continentGdp <- gapminder %>%
+  group_by(continent, year) %>%
+  summarise(gdpPercap = mean(gdpPercap)) %>%
+  ungroup() %>%
+  # factor variable might cause problem, so make it as character variable
+  mutate(region = as.character(continent)) %>% 
+  select(region, year, gdpPercap)
+
+#sepearte Bangladesh and then append with continents life expectancy data to see 
+# the position of our country globally
+
+bdGdpYearly <- gapminder %>%
+  filter(country == "Bangladesh") %>%
+  select(country, year, gdpPercap) %>%
+  rename(region = country)
+
+gdp_combined_Bd_Continent <- bind_rows(continentGdp, bdGdpYearly) %>%
+  mutate(gdpPercap = round(gdpPercap,0))
+rm(bdGdpYearly, continentGdp)
+
+# get the order of the continents and bangladesh to make visualisation more aesthetic
+regionRankGdp <- gdp_combined_Bd_Continent %>%
+  group_by(region) %>%
+  summarise(gdpPercap = round(mean(gdpPercap), 0)) %>%
+  ungroup() %>%
+  arrange(desc(gdpPercap))
+orderedRegion <- regionRankGdp$region
+rm(regionRankGdp)
+
+gdp_combined_Bd_Continent <- gdp_combined_Bd_Continent %>%
+  mutate(region = factor(region, levels = orderedRegion, ordered = TRUE))
+
+lastGdp<- gdp_combined_Bd_Continent %>%
+  group_by(region) %>%
+  arrange(desc(year)) %>%
+  slice(1) %>%
+  arrange(desc(gdpPercap))
+
+```
+
+```{r gdp Plot continents and BD, echo = FALSE}
+col_code <- c("#2f7ed8","#0d233a", "#8bbc21", "#1aadce", "#910000", "#492970")
+
+library(ggrepel)
+
+gdpPlot <- ggplot(gdp_combined_Bd_Continent, aes(x = factor(year), y = gdpPercap, group = region, color = region)) +
+  geom_line(lwd = 0.8) +
+  geom_point(size = 2) +
+  labs(
+    title =  "Average GDP per Capita of the Continents and Bangladesh from 1952 to
+    2007",
+       x = "Year",
+       y = "Amount in US Dollar") +
+  theme_bw()+
+  theme(
+        plot.title = element_text(size= 12, face='bold', color = '#104E8B', hjust = 0.5),
+        axis.title = element_text(size= 9, face="bold"),
+        axis.text.x = element_text(angle = 90, hjust = 0.5, vjust = .2),
+        legend.title = element_blank(), legend.position = "top") +
+  guides(color = guide_legend(nrow = 1)) +
+  scale_color_manual(values = col_code) +
+  geom_text_repel(data = lastGdp, aes(label = paste0(round(gdpPercap, 1))),
+                  fontface ="bold", point.padding = 0.2, size = 3, hjust = "right", show.legend = F)
+
+# print(gdpPlot)
+```
+
+```{r GDP boxplot continennts, exho = FALSE}
+col_code <- c("#2f7ed8","#1d4670", "#8bbc21", "#910000", "#1aadce", "#b3af44")
+
+# library(ggrepel)
+gap_box_plot <- gapminder %>%
+  filter(year == 2007) %>%
+  ggplot(aes(x = continent, y = gdpPercap, fill = continent)) +
+  geom_boxplot(alpha = 0.5) +
+  labs(x = 'Continent', y = 'GDP per Capita [in USD]', 
+       title = "GDP per capita per continent in 2007") +
+  theme_bw()+
+  theme(
+        plot.title = element_text(size= 12, face='bold', color = '#104E8B', 
+                                  hjust = 0.5),
+        axis.title = element_text(size= 9, face="bold"),
+        axis.text.x = element_text(angle = 0, hjust = 0.5, vjust = .2),
+        legend.title = element_blank(), legend.position = "top") +
+  guides(color = guide_legend(nrow = 1)) +
+  scale_fill_manual(values = col_code)
+
+print(gap_box_plot)
+```
+
+This plot suggests, African countries has the lowest GDP compared to the other 
+continents. Continent Asia shows a right-tail distribution indicating that around 
+50% countries have GDP lower than 5000. It also tells a story of income inequality among Asian countries. Oceania has highest GDP per capita but since it only 
+contain two countries, we'll remove it from further EDA. The lower 50% country of
+Europe has higher GDP than Americas except two outlier. Now what about density of GDP for
+each continents in 2007
+
+```{r continents gdp density 2007, echo = FALSE}
+
+gap_den_plot_07 <- gapminder %>%
+  filter(year == 2007) %>% 
+  filter(!(continent %in% c("Oceania"))) %>% 
+  ggplot(aes(x = gdpPercap, fill = continent)) +
+  geom_density(alpha = 0.5) + 
+  # facet_wrap("year") + 
+  labs(x = "GDP per Capita [in USD]", y = 'Density', title = "GDP per capita per continent density in 2007") +
+  theme_bw()+
+  theme(
+        plot.title = element_text(size= 12, face='bold', color = '#104E8B', hjust = 0.5),
+        axis.title = element_text(size= 9, face="bold"),
+        axis.text.x = element_text(angle = 0, hjust = 0.5, vjust = .2),
+        legend.title = element_blank(), legend.position = "top") +
+  guides(color = guide_legend(nrow = 1)) +
+  scale_fill_manual(values = col_code)
+
+print(gap_den_plot_07)
+```
+
+Density plot show high peak for Africa with lower GDP. Asia clearly shows heavy right tail indicating how widely scattered these countries GDP. Europe shows a comparatively flat distribution of higher GDP's. Now let's see how GDP distribution for each continents changes over time
+
+```{r continents gdp density yearly 1952-2007, echo = FALSE}
+
+gap_den_plot <- gapminder %>%
+  # filter(year == 2007) %>% 
+  filter(!(continent %in% c("Oceania"))) %>% 
+  ggplot(aes(x = gdpPercap, fill = continent)) +
+  geom_density(alpha = 0.5) + 
+  facet_wrap("year") +
+  labs(x = "GDP per Capita [in USD]", y = 'Density', title = "GDP per capita per continent density in 2007") +
+  theme_bw()+
+  theme(
+        plot.title = element_text(size= 12, face='bold', color = '#104E8B', hjust = 0.5),
+        axis.title = element_text(size= 9, face="bold"),
+        axis.text.x = element_text(angle = 90, hjust = 0.5, vjust = .2),
+        legend.title = element_blank(), legend.position = "top") +
+  guides(color = guide_legend(nrow = 1)) +
+  scale_fill_manual(values = col_code)
+
+print(gap_den_plot)
+```
+
+Another useful visualization is a bubble chart. Here, we use four variables at a time for visualization, *population size* presented by bubble radius, GDP in y-axis and life expectancy in x-axis. Circles in right upper plot area represent countries with higher GDP and higher life expectancy for each continents and a large circle indicates bigger population. 
+
+```{r bubble gdp + le, echo = FALSE}
+#adding extra customization (labels, title) and changing size of bubbles
+col_code <- c("#2f7ed8","#1d4670", "#8bbc21", "#910000", "#1aadce", "#b3af44")
+
+bubble_plot <- gapminder %>%
+  filter(continent != "Oceania") %>%
+  mutate(pop = round(pop/10^6, 1)) %>%
+  rename(Continent = continent) %>%
+  ggplot(aes(x = gdpPercap, y = lifeExp, color = Continent, size = pop)) +
+  geom_point(alpha=0.4) + scale_x_log10() + scale_size(range = c(.1, 20), name = "Population in Mn") +
+  facet_wrap(~Continent) +
+  labs(x = 'GDP per Capita [in USD]', y = 'Life Expectancy [in years]', title = "World Development in 2007") +
+  theme_bw()+
+  theme(
+        plot.title = element_text(size= 12, face='bold', color = '#104E8B', hjust = 0.5),
+        axis.title = element_text(size= 9, face="bold"),
+        axis.text.x = element_text(angle = 90, hjust = 0.5, vjust = .2),
+        legend.title = element_text(size = 9, face = "bold"), legend.position = "right") +
+  guides(color = guide_legend(order = 1),
+         size = guide_legend(order = 2)) +
+  scale_color_manual(values = col_code)
+
+print(bubble_plot)
+
+```
+
+We can see, in Asia most of the countries have lower GDP with medium life expectancy but bigger population. Africa shows lower value in both GDP and life expectancy for most of the countries. Europe has country wise less population
+but high GDP and high life expectancy. Americas shows higher values even for countries with bigger population.
+
+### EDA: South Asian Countries
+
+Now, let's focus on our neighboring countries. We are interested to know how we 
+stands among our neighbors. Note that, Bhutan and Maldives are missing from the 
+*gapminder* data set. First, we need to do data wrangling to separate those 
+countries data that we are interested, then we do some insightful visualization.
+
+```{r GDP and Life expectancy: year wise south asian countries, warning= FALSE, echo = TRUE}
+
+# life expectancy
+
+sacLe <- gapminder %>%
+  filter(country %in% c("Bangladesh", "Afghanistan", "India", 
+                        "Pakistan", "Sri Lanka", "Nepal")) %>%
+  # factor variable might cause problem, so make it as character variable
+  mutate(country = as.character(country),
+         gdpPercap = round(gdpPercap, 0)) %>% 
+  select(country, year, lifeExp)
+
+
+# get the order of the continents and bangladesh to make visualisation more aesthetic
+sacRankLe <- sacLe %>%
+  group_by(country) %>%
+  summarise(lifeExp = round(mean(lifeExp), 1)) %>%
+  ungroup() %>%
+  arrange(desc(lifeExp))
+orderedcountryLe <- sacRankLe$country
+rm(sacRankLe)
+
+sacLe <- sacLe %>%
+  mutate(country = factor(country, levels = orderedcountryLe, ordered = TRUE),
+         lifeExp = round(lifeExp, 1))
+
+# creating value label in year 2007
+sacLastLe<- sacLe %>%
+  group_by(country) %>%
+  arrange(desc(year)) %>%
+  slice(1) %>%
+  arrange(desc(lifeExp))
+
+# GDP calculation
+sacGdp <- gapminder %>%
+  filter(country %in% c("Bangladesh", "Afghanistan", "India", 
+                        "Pakistan", "Sri Lanka", "Nepal")) %>% 
+  # factor variable might cause problem, so make it as character variable
+  mutate(country = as.character(country),
+         gdpPercap = round(gdpPercap, 0)) %>% 
+  select(country, year, gdpPercap)
+
+# get the order of the countries to make visualization more aesthetic
+sacRankGdp <- sacGdp %>%
+  group_by(country) %>%
+  summarise(gdpPercap = round(mean(gdpPercap), 0)) %>%
+  ungroup() %>%
+  arrange(desc(gdpPercap))
+orderedCountryGdp <- sacRankGdp$country
+rm(sacRankGdp)
+
+sacGdp <- sacGdp %>%
+  mutate(country = factor(country, levels = orderedcountryLe, ordered = TRUE))
+
+sacLastGdp<- sacGdp %>%
+  group_by(country) %>%
+  arrange(desc(year)) %>%
+  slice(1) %>%
+  arrange(desc(gdpPercap))
+
+```
+
+
+```{r gdp saac country line plot, echo = FALSE}
+
+col_code <- c("#2f7ed8","#1d4670", "#8bbc21", "#910000", "#1aadce", "#b3af44")
+
+library(ggrepel)
+sacGdpPlot <- ggplot(sacGdp, aes(x = factor(year), y = gdpPercap, group = country, color = country)) +
+  geom_line(lwd = 0.8) +
+  geom_point(size = 2) +
+  labs(title =  "GDP per Capita",
+       x = "Year",
+       y = "GDP per Capita [in USD]") +
+  theme_bw()+
+  theme(
+        plot.title = element_text(size= 9, face='bold', color = '#104E8B', hjust = 0.5),
+        axis.title = element_text(size= 6, face="bold"),
+        axis.text.x = element_text(angle = 90, hjust = 0.5, vjust = .2),
+        legend.title = element_blank(), legend.position = "top") +
+  guides(color = guide_legend(nrow = 1)) +
+  scale_color_manual(values = col_code) +
+  geom_text_repel(data = sacLastGdp, aes(label = paste0(round(gdpPercap, 0))),
+                  fontface ="bold", point.padding = 0.2, size = 3, hjust = "right", show.legend = F)
+# print(sacGdpPlot)
+
+#Life expectancy plot
+sacLePlot <- ggplot(sacLe, aes(x = factor(year), y = lifeExp , group = country, color = country)) +
+  geom_line(lwd = 0.8) +
+  geom_point(size = 2) +
+  labs(title =  "Expected Life Expectancy at Birth",
+       x = "Year",
+       y = "Expected Age [years]") +
+  theme_bw()+
+  theme(
+        plot.title = element_text(size= 9, face='bold', color = '#104E8B', hjust = 0.5),
+        axis.title = element_text(size= 6, face="bold"),
+        axis.text.x = element_text(angle = 90, hjust = 0.5, vjust = .2),
+        legend.title = element_blank(), legend.position = "top") +
+  guides(color = guide_legend(nrow = 1)) +
+  scale_color_manual(values = col_code) +
+  geom_text_repel(data = sacLastLe, aes(label = paste0(round(lifeExp, 1), "years")),
+                  fontface ="bold", point.padding = 0.2, size = 3, hjust = "right", show.legend = F)
+
+# print(sacLePlot)
+
+library(ggpubr)
+
+sacCombined <- ggarrange(sacLePlot, sacGdpPlot, common.legend = TRUE, nrow = 1, ncol = 2)
+sacCombinedHeading<- annotate_figure(sacCombined,
+                                      top = text_grob(paste0("Six South Asian Countries Life Expectancy and GDP history from 1952-2007"), color = "#0d233a", face = "bold", size = 11))
+print(sacCombinedHeading)
+```
+
+In 2007, Sri Lanka has both high GDP and high life expectancy among our neighbor 
+countries. Bangladesh was at fourth place in both parameters and Afghanistan cames last. Besides Sri Lanka and Afghanistan, other four has similar life expectancy in 2007 but shows a higher difference in GDP.
+
+
+### Data Modelling
+
+Now we perform some basic modeling using linear and second order polynomial regression. Model adequacy checking are beyond the scope of this report. We want to predict the life expectancy of Bangladesh in 2011 and 2021
+
+```{r modelling}
+gapminder_bd <- gapminder %>%
+  filter(country == "Bangladesh")
+
+gpAfter70 <- gapminder %>%
+  filter(country == "Bangladesh", year>=1970)
+
+#ggplot(data = gapminder_bd, aes(x = year, y = gdpPercap)) + geom_point()
+#ggplot(data = gpAfter70, aes(x = year, y = gdpPercap)) + geom_point()
+
+# life expextency modelling
+bd_lifeExp_model <- lm(lifeExp~year, data = gapminder_bd)
+bd_lifeExp_model_squared <- lm(lifeExp~year + I(year^2), data = gapminder_bd)
+summary(bd_lifeExp_model)
+summary(bd_lifeExp_model_squared)
+predict(bd_lifeExp_model, newdata = data.frame(year = c(2011, 2021)))
+
+```
+As we can see, life expectancy prediction in 2011 is 65.52 years and 74.66 years in 2021. Both are very close to the actual values. Life expectancy with prediction line are given below. Both linear and polynomial model shows high r-squared value means both model captures most of the variability of the predictors. Though, polynomial gives slightly better result but we choose linear model because of its simplicity and interpretablity.
+
+
+```{r life expectancy modelling plot, echo = FALSE}
+# {r setup, include=TRUE, cache = FALSE}
+#life exp plot
+
+gapminder_bd <- gapminder %>%
+  filter(country == "Bangladesh")
+
+lfeplot <- gapminder_bd %>% 
+  modelr:: add_predictions(bd_lifeExp_model, var="linear") %>%
+  modelr:: add_predictions(bd_lifeExp_model_squared, var="squared") %>%
+  ggplot(aes(x= year, y=lifeExp)) + geom_point(size = 2.5) +
+  geom_line(aes(y=linear), color="red", lwd = 1.3) +
+  # geom_line(aes(y=squared), color="#2f7ed8", lwd = 1.3) +
+  labs(title =  "Life Expectancy vs Year for Bangladesh from 1952 to 2007",
+       x = "Year",
+       y = "Age in Years") +
+  theme_bw()+
+  theme(
+        plot.title = element_text(size= 12, face='bold', color = '#104E8B', hjust = 0.5),
+        axis.title = element_text(size= 9, face = "bold"),
+        axis.text.x = element_text(angle = 90, hjust = 0.5, vjust = .2),
+        legend.title = element_blank(), legend.position = "top") +
+  guides(color = guide_legend(nrow = 1))
+
+print(lfeplot)
+
+```
+
+Now, let's try to model GDP per capita in Bangladesh. Again, complex models are beyond the scope of this report,so we use linear and first order  polynomial regression to predict GDP per Capita in 2011 and 2021 in Bangladesh. We use a trick here, we first model using all data and then we use data since 1970 because after liberation war, there is a high possibility that more stability will be gain
+
+```{r gdp modelling: all vd after 1970}
+
+# gdp modelling
+bd_gdp_model <- lm(gdpPercap~year, data = gapminder_bd)
+bd_gdp_model_squared <- lm(gdpPercap~year + I(year^2), data = gapminder_bd)
+# summary(bd_gdp_model)
+summary(bd_gdp_model_squared)
+
+## after 1970, gdp modelling
+bd_gdp_model_70 <- lm(gdpPercap~year, data = gpAfter70)
+bd_gdp_model_squared_70 <- lm(gdpPercap~year + I(year^2), data = gpAfter70)
+# summary(bd_gdp_model_70)
+summary(bd_gdp_model_squared_70)
+
+predict(bd_gdp_model_squared_70, newdata = data.frame(year = c(2011, 2021)))
+
+```
+
+We fit linear and polynomial for both data sets( one is 1952-2007 and other is 1970-2007). Polynomial model with second data sets(from year 1970) explains best and predicts \$1567 GDP per capita in 2011 and \$2158 in 2021. Both models ar plotted below with linear and polynomial regression line 
+
+```{r gdp model plotting all vs after 1970, echo = FALSE}
+
+allgdp <- gapminder_bd %>% modelr:: add_predictions(bd_gdp_model, var="linear") %>%
+  modelr:: add_predictions(bd_gdp_model_squared, var="squared") %>%
+  ggplot(aes(x = year, y = gdpPercap)) + geom_point() +
+  geom_line(aes(y = linear), colour="red") +
+  geom_line(aes(y = squared), colour="#2f7ed8", lwd = 1.3)+
+    labs(title =  "GDP Per Capita vs Year for Bangladesh from 1952 to 2007",
+       x = "Year",
+       y = "GDP per Capita [in USD]") +
+  theme_bw()+
+  theme(
+        plot.title = element_text(size= 8, face='bold', color = '#104E8B', hjust = 0.5),
+        axis.title = element_text(size= 6, face = "bold"),
+        axis.text.x = element_text(angle = 90, hjust = 0.01, vjust = .2),
+        legend.title = element_blank(), legend.position = "top")
+
+
+allgdp <- gapminder_bd %>% modelr:: add_predictions(bd_gdp_model, var="linear") %>%
+  modelr:: add_predictions(bd_gdp_model_squared, var="squared") %>%
+  ggplot(aes(x = year, y = gdpPercap)) + geom_point() +
+  geom_line(aes(y = linear), colour="red") +
+  geom_line(aes(y = squared), colour="#2f7ed8", lwd = 1.3)+
+    labs(title =  "GDP Per Capita vs Year for Bangladesh from 1952 to 2007",
+       x = "Year",
+       y = "GDP per Capita [in USD]") +
+  theme_bw()+
+  theme(
+        plot.title = element_text(size= 8, face='bold', color = '#104E8B', hjust = 0.5),
+        axis.title = element_text(size= 6, face = "bold"),
+        axis.text.x = element_text(angle = 90, hjust = 0.01, vjust = .2),
+        legend.title = element_blank(), legend.position = "top")
+
+gdp70 <- gpAfter70 %>% modelr:: add_predictions(bd_gdp_model_70, var="linear") %>%
+  modelr:: add_predictions(bd_gdp_model_squared_70, var="squared") %>%
+  ggplot(aes(x = year, y = gdpPercap)) + geom_point() +
+  geom_line(aes(y = linear), colour="red") +
+  geom_line(aes(y = squared), colour="#2f7ed8", lwd = 1.3) +
+    labs(title =  "GDP Per Capita vs Year for Bangladesh from 1970 to 2007",
+       x = "Year",
+       y = "GDP per Capita [in USD]") +
+  theme_bw()+
+  theme(
+        plot.title = element_text(size= 8, face='bold', color = '#104E8B', hjust = 0.5),
+        axis.title = element_text(size= 6, face = "bold"),
+        axis.text.x = element_text(angle = 90, hjust = 0.01, vjust = .2),
+        legend.title = element_blank(), legend.position = "top")
+
+library(ggpubr)
+
+gdpCombined <- ggarrange(allgdp, gdp70, common.legend = TRUE, nrow = 1, ncol = 2)
+gdpCombinedHeading<- annotate_figure( gdpCombined,
+                                      top = text_grob(paste0("First Order and Second Order Polynomial model fitting using Yearly GDP"), color = "#0d233a", face = "bold", size = 11))
+print(gdpCombinedHeading)
+
+```
+
+In this report, we’ve introduced the idea of doing data manipulation using *tidyverse*, and talked about exploratory data analysis. We also try to predict life expectancy and GDP per Capita using linear and polynomial regression 
+
+### Reference List
+
+1. [gapminder: Data from Gapminder](https://cran.r-project.org/web/packages/gapminder/index.html)
+2. [R for Data Science](https://r4ds.had.co.nz/)
+3. [ggplot2: Elegant Graphics for Data Analysis](https://ggplot2-book.org/)
